@@ -1,0 +1,50 @@
+name: TRON Monitor
+
+on:
+  schedule:
+    # Запуск у 55-ту хвилину кожні 4 години (00:55, 04:55 і т.д.)
+    - cron: '25 */5 * * *'
+  workflow_dispatch:
+
+jobs:
+  make-commit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Fetch TRX Price
+        run: |
+          # 1. Рандомна затримка (до 10 хвилин)
+          sleep $((RANDOM % 700))
+          
+          TIMESTAMP=$(date "+%Y-%m-%d %H:%M")
+
+          # 2. Отримуємо ціну TRX (ідентифікатор: tron)
+          RESPONSE=$(curl -s --max-time 15 "https://api.coingecko.com/api/v3/simple/price?ids=tron&vs_currencies=usd")
+          TRX=$(echo $RESPONSE | jq -r '.tron.usd // empty')
+
+          # 3. Назва файлу (виберіть з таблиці нижче)
+          FILE_NAME="super_rep.info"
+
+          # 4. Логіка запису
+          if [ -z "$TRX" ] || [ "$TRX" == "null" ]; then
+            # План Б: системне повідомлення (стиль TRON)
+            LOG_ENTRY="[$TIMESTAMP] Witness: block production stable"
+            COMMIT_MSG="grid: health check $TIMESTAMP [skip ci]"
+          else
+            # План А: ціна монети
+            LOG_ENTRY="[$TIMESTAMP] TRX Market Index: \$$TRX USD"
+            COMMIT_MSG="trx: market data sync $TIMESTAMP [skip ci]"
+          fi
+
+          # 5. Оновлення файлу (зберігаємо останні 25 рядків для легкості)
+          echo "$LOG_ENTRY" >> $FILE_NAME
+          echo "$(tail -n 45 $FILE_NAME)" > $FILE_NAME
+
+          # 6. Пуш
+          git config --local user.email "work.victrozborovskyi@gmail.com"
+          git config --local user.name "GitHub Action Bot"
+          git add $FILE_NAME
+          git commit -m "$COMMIT_MSG"
+          git push
